@@ -37,7 +37,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    // 等待所有子进程完成
+    // 防御性编程，确保没有未处理的子进程。
     while(wait(0) != -1);
     
     exit(0);
