@@ -95,3 +95,22 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+// my trace
+uint64
+sys_trace(void) {
+  int mask;
+  if(argint(0, &mask) < 0) {
+    return -1;
+  };
+  myproc()->mask = mask;
+  return 0;
+}
+
+uint64
+sys_sysinfo(void) {
+  
+  //uint64 freeMem = kfreemem();
+  
+  return 0;
+}
