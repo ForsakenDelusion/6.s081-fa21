@@ -81,7 +81,7 @@ kalloc(void)
   return (void*)r;
 }
 
-uint64
+int
 kfreemem(void) {
   int counter = 0;
   struct run *p;

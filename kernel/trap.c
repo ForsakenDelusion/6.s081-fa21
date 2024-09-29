@@ -43,6 +43,7 @@ usertrap(void)
 
   // send interrupts and exceptions to kerneltrap(),
   // since we're now in the kernel.
+  //现在我们已经在内核态了，所以设置stvec指向内核陷入处理程序
   w_stvec((uint64)kernelvec);
 
   struct proc *p = myproc();
