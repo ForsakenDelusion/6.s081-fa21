@@ -1,5 +1,13 @@
 #include "types.h"
 
+/**
+ * 使用指定字符填充内存区域
+ * 
+ * @param dst 目标内存区域的起始地址
+ * @param c   要填充的字符
+ * @param n   填充的字符数
+ * @return    返回值为被填充的内存区域的起始地址
+ */
 void*
 memset(void *dst, int c, uint n)
 {
