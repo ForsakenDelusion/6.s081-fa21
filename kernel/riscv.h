@@ -360,8 +360,9 @@ sfence_vma()
 // MAXVA is actually one bit less than the max allowed by
 // Sv39, to avoid having to sign-extend virtual addresses
 // that have the high bit set.
+//因为我们采用Sv39，所以虚拟地址为39位长度，将1左移39-1位(用二进制)，就是2^38就是我们能表示的最大虚拟地址
 #define MAXVA (1L << (9 + 9 + 9 + 12 - 1))
 
 typedef uint64 pte_t;
 typedef uint64 *pagetable_t; // 512 PTEs
-//这啥啊 这个页表在哪定义的
+//这啥啊 这个页表在哪定义的，哦 这只是定义了一个类型

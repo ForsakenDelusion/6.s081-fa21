@@ -140,6 +140,7 @@ found:
   // 创建完了顺便把 pid 直接放进去
 
   // An empty user page table.
+  // 给进程分配一个页表
   p->pagetable = proc_pagetable(p);
   if(p->pagetable == 0){
     freeproc(p);
@@ -217,7 +218,6 @@ proc_pagetable(struct proc *p)
     uvmfree(pagetable, 0);
     return 0;
   }
-  
 
   return pagetable;
 }
