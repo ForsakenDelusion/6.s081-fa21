@@ -81,7 +81,29 @@ int
 sys_pgaccess(void)
 {
   // lab pgtbl: your code here.
-  return 0;
+  uint64 va;
+  int npages;
+  uint64 uaddr; 
+
+  //arg err
+  if ((argaddr(0, &va) < 0) | (argint(1, &npages) < 0) | (argaddr(2, &uaddr))) {
+    return -1;
+  }
+
+  // get thte bitmask
+  uint64 bitmask = 0;
+  for (int i = 0; i < npages; i++) {
+      pte_t *pte = walk(myproc()->pagetable, va + i * PGSIZE, 0);
+      if (pte && (*pte & PTE_V) && (*pte & PTE_A)) {
+          bitmask |= (1 << i); // 设置位掩码中的对应位
+          *pte ^= PTE_A;
+      }
+  }
+
+  if (copyout(myproc()->pagetable, uaddr, (char*)&bitmask, sizeof(bitmask)) < 0)
+    return -1;
+
+  return 0; // 成功
 }
 #endif
 
