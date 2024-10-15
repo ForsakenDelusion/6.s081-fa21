@@ -85,7 +85,7 @@ usertrap(void)
       p->alarmepc = (uint64)r_sepc;
       p->alarmframe = *p->trapframe;
       p->alarmlock = 1;
-      p->trapframe->epc = p->addFunc; // 这里卡了好久，以知不知道怎么执行，之前写成了w_stepc = p->addFunc，知道看了usertrapret()的代码才发现问题所在
+      p->trapframe->epc = p->addFunc; // 这里卡了好久，以知不知道怎么执行，之前写成了w_stepc(p->addFunc)，知道看了usertrapret()的代码才发现问题所在
       }
     }
     

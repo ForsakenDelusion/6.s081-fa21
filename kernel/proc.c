@@ -121,6 +121,7 @@ found:
   p->state = USED;
   p->sinceticks = 0;
   p->nticks = 0;
+  p->addFunc = 0;
   p->alarmlock = 0;
 
   // Allocate a trapframe page.
