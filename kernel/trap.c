@@ -88,7 +88,6 @@ usertrap(void)
       p->trapframe->epc = p->addFunc; // 这里卡了好久，以知不知道怎么执行，之前写成了w_stepc(p->addFunc)，知道看了usertrapret()的代码才发现问题所在
       }
     }
-    
   }
   yield();
 
