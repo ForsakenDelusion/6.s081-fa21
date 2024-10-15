@@ -77,8 +77,20 @@ usertrap(void)
     exit(-1);
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2)
-    yield();
+  if(which_dev == 2) {
+    if (p->alarmlock == 0 && p->nticks > 0) {
+      p->sinceticks ++;
+      if (p->sinceticks == p->nticks) {
+      p->sinceticks = 0;
+      p->alarmepc = (uint64)r_sepc;
+      p->alarmframe = *p->trapframe;
+      p->alarmlock = 1;
+      p->trapframe->epc = p->addFunc; // 这里卡了好久，以知不知道怎么执行，之前写成了w_stepc = p->addFunc，知道看了usertrapret()的代码才发现问题所在
+      }
+    }
+    
+  }
+  yield();
 
   usertrapret();
 }
