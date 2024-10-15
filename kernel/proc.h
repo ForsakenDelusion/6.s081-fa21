@@ -112,7 +112,6 @@ struct proc {
 
   // for back trap user program
   uint64 alarmepc;             // for alarm caller
-  uint64 alarmsstatus;
   struct trapframe alarmframe ;
 
   // alarm lock
