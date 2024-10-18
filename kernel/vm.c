@@ -303,7 +303,7 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   pte_t *pte;
   uint64 pa, i;
   uint flags;
-  char *mem;
+//  char *mem;
 
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
@@ -311,14 +311,18 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
     if((*pte & PTE_V) == 0)
       panic("uvmcopy: page not present");
     pa = PTE2PA(*pte);
+
+    *pte &= (~PTE_W); // 这里清除了 PTE_W
+    *pte |= PTE_C;    // 添加 PTE_C 代表这是一个 COW 页，之后会讲
     flags = PTE_FLAGS(*pte);
-    if((mem = kalloc()) == 0)
-      goto err;
-    memmove(mem, (char*)pa, PGSIZE);
-    if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
-      kfree(mem);
+ //   if((mem = kalloc()) == 0)
+ //     goto err;
+ //   memmove(mem, (char*)pa, PGSIZE);
+    if(mappages(new, i, PGSIZE, pa, flags) != 0){
+  //    kfree(mem);
       goto err;
     }
+    pgref_inc((void*)pa);
   }
   return 0;
 
@@ -349,6 +353,14 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
   uint64 n, va0, pa0;
 
   while(len > 0){
+
+    if (is_cow_page(pagetable, dstva)) {
+      if (alloc_cow_page(pagetable, dstva) != 0) {
+        printf("copyout(): alloc cow page failed.\n");
+        return -1;
+      }
+    }
+
     va0 = PGROUNDDOWN(dstva);
     pa0 = walkaddr(pagetable, va0);
     if(pa0 == 0)
@@ -431,4 +443,49 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   } else {
     return -1;
   }
+}
+
+int 
+is_cow_page(pagetable_t pagetable, uint64 va) {
+if(va >= MAXVA) 
+    return 0;
+  pte_t* pte = walk(pagetable, PGROUNDDOWN(va), 0);
+  if(pte == 0)             // 如果这个页不存在
+    return 0;
+  if((*pte & PTE_V) == 0)
+    return 0;
+  if((*pte & PTE_U) == 0)
+    return 0;
+  return ((*pte) & PTE_C); // 有 PTE_C 的代表还没复制过，并且是 cow 页
+}
+
+
+int 
+alloc_cow_page(pagetable_t pagetable, uint64 va) {
+
+  pte_t* pte = walk(pagetable, va, 0);
+  uint64 perm = PTE_FLAGS(*pte);
+
+  if(pte == 0) return -1;
+  uint64 prev_sta = PTE2PA(*pte); // 这里的 prev_sta 就是这个页帧原来使用的父进程的页表
+                                  // 这里写 sta 是因为这个地址是和页帧对齐的（page-aligned）
+                                  // 所以写个 sta 表示一个页帧的开始
+  void* newpage = kalloc();     
+  if(!newpage){
+    return -1;
+  }
+  uint64 va_sta = PGROUNDDOWN(va); // 当前页帧
+
+  perm &= (~PTE_C); // 复制之后就不是合法的 COW 页了
+  perm |= PTE_W;    // 复制之后就可以写了
+
+  memmove(newpage, (void*)prev_sta, PGSIZE); // 把父进程页帧的数据复制一遍
+  uvmunmap(pagetable, va_sta, 1, 1);      // 然后取消对父进程页帧的映射
+  
+  if(mappages(pagetable, va_sta, PGSIZE, (uint64)newpage, perm) < 0){
+    kfree(newpage);
+    return -1;
+  }
+  return 0;
+
 }
