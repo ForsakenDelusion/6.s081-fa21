@@ -463,29 +463,36 @@ if(va >= MAXVA)
 int 
 alloc_cow_page(pagetable_t pagetable, uint64 va) {
 
-  pte_t* pte = walk(pagetable, va, 0);
-  uint64 perm = PTE_FLAGS(*pte);
+uint64 pa;
+char* mem;
+pte_t* pte;
+int flags;
 
-  if(pte == 0) return -1;
-  uint64 prev_sta = PTE2PA(*pte); // 这里的 prev_sta 就是这个页帧原来使用的父进程的页表
-                                  // 这里写 sta 是因为这个地址是和页帧对齐的（page-aligned）
-                                  // 所以写个 sta 表示一个页帧的开始
-  void* newpage = kalloc();     
-  if(!newpage){
-    return -1;
-  }
-  uint64 va_sta = PGROUNDDOWN(va); // 当前页帧
+va = PGROUNDDOWN(va);
 
-  perm &= (~PTE_C); // 复制之后就不是合法的 COW 页了
-  perm |= PTE_W;    // 复制之后就可以写了
+pte = walk(pagetable, va, 0);
 
-  memmove(newpage, (void*)prev_sta, PGSIZE); // 把父进程页帧的数据复制一遍
-  uvmunmap(pagetable, va_sta, 1, 1);      // 然后取消对父进程页帧的映射
-  
-  if(mappages(pagetable, va_sta, PGSIZE, (uint64)newpage, perm) < 0){
-    kfree(newpage);
-    return -1;
-  }
-  return 0;
+flags = PTE_FLAGS(*pte);
+flags ^= PTE_C;
+flags |= PTE_W;
+
+pa = walkaddr(pagetable, va);
+
+mem = kalloc();
+if (!mem) {
+printf("alloc_cow_page(): kalloc failed.\n");
+  return -1;
+}
+
+memmove(mem, (void*)pa , PGSIZE);
+uvmunmap(pagetable, va, 1, 1); // 这里do_free设置为1，让这个函数调用kfree函数，使之页面引用变少
+
+if (mappages(pagetable, va, PGSIZE, (uint64)mem, flags) < 0) {
+  printf("alloc_cow_page(): map failed");
+  kfree(mem);
+  return -1;
+}
+
+return 0;
 
 }
