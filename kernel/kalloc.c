@@ -10,7 +10,7 @@
 #include "defs.h"
 
 #define PPAGEMAX ((PHYSTOP - KERNBASE) / PGSIZE)
-#define PG2INDEX(pa) ((uint64)pa / PGSIZE)
+#define PG2INDEX(pa) (((uint64)pa - KERNBASE )/ PGSIZE)
 #define PGREF(pa) pgrefarr[PG2INDEX(pa)] // 主要用这个，直接传pa就能访问数组了
 
 int pgrefarr[PPAGEMAX];
@@ -92,8 +92,11 @@ kalloc(void)
   release(&kmem.lock);
 
   if(r)
+  {
     memset((char*)r, 5, PGSIZE); // fill with junk
-  PGREF(r) = 1;
+    PGREF(r) = 1;
+  }
+    
   return (void*)r;
 }
 
