@@ -17,6 +17,9 @@ struct entry *table[NBUCKET];
 int keys[NKEYS];
 int nthread = 1;
 
+pthread_mutex_t lock;
+
+pthread_mutex_init(lock);
 
 double
 now()
@@ -36,6 +39,7 @@ insert(int key, int value, struct entry **p, struct entry *n)
   *p = e;
 }
 
+
 static 
 void put(int key, int value)
 {
@@ -52,9 +56,12 @@ void put(int key, int value)
     e->value = value;
   } else {
     // the new is new.
+    pthread_mutex_lock(&lock);
     insert(key, value, &table[i], table[i]);
-  }
+    pthread_mutex_unlock(&lock);
 
+  }
+  
 }
 
 static struct entry*
@@ -67,7 +74,6 @@ get(int key)
   for (e = table[i]; e != 0; e = e->next) {
     if (e->key == key) break;
   }
-
   return e;
 }
 
