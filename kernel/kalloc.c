@@ -18,15 +18,35 @@ struct run {
   struct run *next;
 };
 
+
 struct {
   struct spinlock lock;
   struct run *freelist;
 } kmem;
 
+struct cpufreearr {
+  struct spinlock cpulock;
+  struct run* cpufreelist;
+};
+
+struct cpufreearr freelistarr[NCPU];
+
+int
+mycpuid()
+{
+  push_off();
+  int id = cpuid();
+  pop_off();
+  return id;
+}
+
 void
 kinit()
-{
+{ 
   initlock(&kmem.lock, "kmem");
+  for (int i = 0; i < NCPU; i++) {
+    initlock(&freelistarr[i].cpulock,"kmem-cpulock");
+  }
   freerange(end, (void*)PHYSTOP);
 }
 
@@ -46,7 +66,8 @@ freerange(void *pa_start, void *pa_end)
 void
 kfree(void *pa)
 {
-  struct run *r;
+  struct run *cr;
+  int id = mycpuid();
 
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
@@ -54,12 +75,13 @@ kfree(void *pa)
   // Fill with junk to catch dangling refs.
   memset(pa, 1, PGSIZE);
 
-  r = (struct run*)pa;
+  cr = (struct run*)pa;
+  acquire(&freelistarr[id].cpulock);
+  cr->next = freelistarr[id].cpufreelist;
+  freelistarr[id].cpufreelist = cr;
+  release(&freelistarr[id].cpulock);
 
-  acquire(&kmem.lock);
-  r->next = kmem.freelist;
-  kmem.freelist = r;
-  release(&kmem.lock);
+
 }
 
 // Allocate one 4096-byte page of physical memory.
@@ -68,15 +90,39 @@ kfree(void *pa)
 void *
 kalloc(void)
 {
-  struct run *r;
+  struct run *cr;
+  struct run* rr;
 
-  acquire(&kmem.lock);
-  r = kmem.freelist;
-  if(r)
-    kmem.freelist = r->next;
-  release(&kmem.lock);
+  int id = mycpuid();
+  acquire(&freelistarr[id].cpulock);
 
-  if(r)
-    memset((char*)r, 5, PGSIZE); // fill with junk
-  return (void*)r;
+  cr = freelistarr[id].cpufreelist;
+
+  if (!cr) { // 当前cpu维护的freelist没有空闲内存了，要偷一点
+  int stealpage = 64;
+  
+  for (int i = 0;i < NCPU; i++) {
+
+    if (i == id) continue;
+    acquire(&freelistarr[i].cpulock);
+    rr = freelistarr[i].cpufreelist;
+    while (rr && stealpage) {
+    freelistarr[i].cpufreelist = rr->next;
+    rr->next = cr;
+    cr = rr;
+    rr = freelistarr[i].cpufreelist;
+    stealpage--;
+    }
+    release(&freelistarr[i].cpulock);
+    if (stealpage == 0) break;
+  }
+  }
+  if(cr)
+    freelistarr[id].cpufreelist = cr->next;
+  release(&freelistarr[id].cpulock);
+
+  if(cr)
+    memset((char*)cr, 5, PGSIZE); // fill with junk
+  return (void*)cr;
+  
 }
