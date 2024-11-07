@@ -484,3 +484,15 @@ sys_pipe(void)
   }
   return 0;
 }
+
+uint64
+sys_symlink(void){
+char* target;
+char* path;
+
+target = argaddr(0, &target);
+path = argaddr(1, &path);
+
+
+
+}
