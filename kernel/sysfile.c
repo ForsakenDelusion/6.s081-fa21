@@ -316,30 +316,31 @@ sys_open(void)
     }
   }
 
-   if(!(omode & O_NOFOLLOW)){
-    int rec_left = 10; // 递归次数限制，软链接可能成环
-    struct inode* next_file;
-    while(rec_left && ip->type == T_SYMLINK){
-      
-      if(readi(ip, 0, (uint64)path, 0, MAXPATH) == 0){
+   // 处理符号链接
+  if(ip->type == T_SYMLINK && !(omode & O_NOFOLLOW)) {
+    // 若符号链接指向的仍然是符号链接，则递归的跟随它
+    // 直到找到真正指向的文件
+    // 但深度不能超过MAX_SYMLINK_DEPTH
+    int MAX_SYMLINK_DEPTH = 10;
+    for(int i = 0; i < MAX_SYMLINK_DEPTH; ++i) {
+      // 读出符号链接指向的路径
+      if(readi(ip, 0, (uint64)path, 0, MAXPATH) != MAXPATH) {
         iunlockput(ip);
         end_op();
         return -1;
       }
-
-      if((next_file = namei(path)) == 0){
-        // namei 可用从一个路径获得 inode
-        iunlockput(ip);
+      iunlockput(ip);
+      ip = namei(path);
+      if(ip == 0) {
         end_op();
         return -1;
       }
-      iunlockput(ip); // 储存链接的文件已经使用完了
-      ip = next_file;
-      rec_left--;  
-      ilock(ip); // 在这里加锁而不在 while 的下面是因为如果这个 inode 不是一个软链接
-                 // 我们还是需要持有这个锁的，因为后面的处理代码会修改 inode
+      ilock(ip);
+      if(ip->type != T_SYMLINK)
+        break;
     }
-    if(rec_left <= 0){
+    // 超过最大允许深度后仍然为符号链接，则返回错误
+    if(ip->type == T_SYMLINK) {
       iunlockput(ip);
       end_op();
       return -1;
