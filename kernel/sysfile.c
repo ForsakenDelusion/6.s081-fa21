@@ -125,38 +125,38 @@ sys_link(void)
   if(argstr(0, old, MAXPATH) < 0 || argstr(1, new, MAXPATH) < 0)
     return -1;
 
-  begin_op();
-  if((ip = namei(old)) == 0){
+  begin_op(); // 开始事务
+  if((ip = namei(old)) == 0){ // namei的时候就会增加inode的引用了，在 namei 函数调用后，返回的 inode ip 的引用计数已经被增加了。这是 namei 的内部机制：每次成功找到并返回一个 inode 时，namei 都会调用 iget 函数来增加引用计数，确保这个 inode 在使用过程中不会被其他操作删除。
     end_op();
     return -1;
   }
 
-  ilock(ip);
-  if(ip->type == T_DIR){
-    iunlockput(ip);
+  ilock(ip); // 开始修开inode，要先加锁
+  if(ip->type == T_DIR){ // 目录的话，就失效
+    iunlockput(ip); // 释放ip锁，并减少引用
     end_op();
     return -1;
   }
 
   ip->nlink++;
-  iupdate(ip);
-  iunlock(ip);
+  iupdate(ip); // 更新数据到磁盘
+  iunlock(ip); // 释放inode锁
 
-  if((dp = nameiparent(new, name)) == 0)
+  if((dp = nameiparent(new, name)) == 0) // 找到当前inode的父目录，并且找到其名字赋给name
     goto bad;
-  ilock(dp);
-  if(dp->dev != ip->dev || dirlink(dp, name, ip->inum) < 0){
+  ilock(dp); // 接下来要操作dp，所以先加锁
+  if(dp->dev != ip->dev || dirlink(dp, name, ip->inum) < 0){ // 判断是否操作的是一个设备，是否能够将新的硬链接条目添加到父目录 dp 中。dirlink(dp, name, ip->inum) 的作用是将 name 作为一个新的目录项插入到目录 dp 中，并将其指向文件 ip->inum（即原文件的 inode 号）
     iunlockput(dp);
     goto bad;
   }
-  iunlockput(dp);
-  iput(ip);
+  iunlockput(dp); // 是对父目录 inode 的操作，解锁并减少其引用计数，因为已经完成了所有操作
+  iput(ip); // 是对被链接的目标文件 inode 的操作，减少其引用计数，我们已经完成了对inode的所有操作
 
-  end_op();
+  end_op(); // 结束事务
 
   return 0;
 
-bad:
+bad: // 恢复之前进行过的操作
   ilock(ip);
   ip->nlink--;
   iupdate(ip);
@@ -287,7 +287,7 @@ uint64
 sys_open(void)
 {
   char path[MAXPATH];
-  int fd, omode;
+  int fd, omode; // 文件描述符和open参数
   struct file *f;
   struct inode *ip;
   int n;
@@ -304,12 +304,42 @@ sys_open(void)
       return -1;
     }
   } else {
-    if((ip = namei(path)) == 0){
+     if((ip = namei(path)) == 0){
       end_op();
       return -1;
     }
     ilock(ip);
     if(ip->type == T_DIR && omode != O_RDONLY){
+      iunlockput(ip);
+      end_op();
+      return -1;
+    }
+  }
+
+   if(!(omode & O_NOFOLLOW)){
+    int rec_left = 10; // 递归次数限制，软链接可能成环
+    struct inode* next_file;
+    while(rec_left && ip->type == T_SYMLINK){
+      
+      if(readi(ip, 0, (uint64)path, 0, MAXPATH) == 0){
+        iunlockput(ip);
+        end_op();
+        return -1;
+      }
+
+      if((next_file = namei(path)) == 0){
+        // namei 可用从一个路径获得 inode
+        iunlockput(ip);
+        end_op();
+        return -1;
+      }
+      iunlockput(ip); // 储存链接的文件已经使用完了
+      ip = next_file;
+      rec_left--;  
+      ilock(ip); // 在这里加锁而不在 while 的下面是因为如果这个 inode 不是一个软链接
+                 // 我们还是需要持有这个锁的，因为后面的处理代码会修改 inode
+    }
+    if(rec_left <= 0){
       iunlockput(ip);
       end_op();
       return -1;
@@ -487,12 +517,36 @@ sys_pipe(void)
 
 uint64
 sys_symlink(void){
-char* target;
-char* path;
 
-target = argaddr(0, &target);
-path = argaddr(1, &path);
+char target[MAXPATH], path[MAXPATH];
+struct inode* i;
 
 
+if(argstr(0, target,MAXPATH) < 0 || argstr(1, path,MAXPATH) < 0) {
+  return -1;
+}
 
+// printf("target is %s \n", target);
+// printf("path is %s \n", path);
+
+begin_op();
+
+i = create(path, T_SYMLINK,0, 0); // 创建一个软连接类型的文件
+
+if(i == 0) {
+  end_op();
+  return -1;
+}
+
+if (writei(i,0,(uint64)target,0,strlen(target)) < 0) { // 往文件里面写路径，待会我们读的时候就要利用写进去的路径读
+end_op();
+return -1;
+}; 
+
+iunlockput(i);
+
+end_op();
+
+
+return 0;
 }

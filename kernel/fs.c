@@ -579,12 +579,12 @@ namecmp(const char *s, const char *t)
 // Look for a directory entry in a directory.
 // If found, set *poff to byte offset of entry.
 struct inode*
-dirlookup(struct inode *dp, char *name, uint *poff)
+dirlookup(struct inode *dp, char *name, uint *poff) // 用于在目录inode中查找指定名称的文件或子目录
 {
   uint off, inum;
   struct dirent de;
 
-  if(dp->type != T_DIR)
+  if(dp->type != T_DIR) // 不是目录就直接报错
     panic("dirlookup not DIR");
 
   for(off = 0; off < dp->size; off += sizeof(de)){
@@ -682,23 +682,23 @@ namex(char *path, int nameiparent, char *name)
 {
   struct inode *ip, *next;
 
-  if(*path == '/')
+  if(*path == '/') // 判断是否是绝对路径
     ip = iget(ROOTDEV, ROOTINO);
   else
-    ip = idup(myproc()->cwd);
+    ip = idup(myproc()->cwd); // ip指向当前目录
 
-  while((path = skipelem(path, name)) != 0){
+  while((path = skipelem(path, name)) != 0){ // 进入循环，一层一层解析。skipelem 函数从路径中提取一个元素，并将剩余的路径返回。例如，对路径 /a/b/c 第一次调用 skipelem 会提取 a，并将 path 设置为 "/b/c"，将 name 设置为 "a"
     ilock(ip);
     if(ip->type != T_DIR){
       iunlockput(ip);
       return 0;
     }
-    if(nameiparent && *path == '\0'){
+    if(nameiparent && *path == '\0'){ // 如果nameiparent为真且path当前没有解析到结尾
       // Stop one level early.
       iunlock(ip);
       return ip;
     }
-    if((next = dirlookup(ip, name, 0)) == 0){
+    if((next = dirlookup(ip, name, 0)) == 0){ // 在当前目录中寻找匹配的名字
       iunlockput(ip);
       return 0;
     }
