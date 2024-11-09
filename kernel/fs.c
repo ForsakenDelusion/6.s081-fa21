@@ -462,10 +462,9 @@ itrunc(struct inode *ip)
     ip->addrs[NDIRECT] = 0;
   }
 
-    if(ip->addrs[NDIRECT + 1]) {
+  if(ip->addrs[NDIRECT + 1]) {
     bp = bread(ip->dev, ip->addrs[NDIRECT + 1]);
     a = (uint*)bp->data;
-
     for(i = 0; i < NINDIRECT; i++) {
       if(a[i]) {
         struct buf *bp2 = bread(ip->dev, a[i]);
