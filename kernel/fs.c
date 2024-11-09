@@ -702,8 +702,8 @@ namex(char *path, int nameiparent, char *name)
       iunlockput(ip);
       return 0;
     }
-    iunlockput(ip);
-    ip = next;
+    iunlockput(ip); // 对ip的使用结束，释放所，引用-1
+    ip = next; // 更新ip
   }
   if(nameiparent){
     iput(ip);
