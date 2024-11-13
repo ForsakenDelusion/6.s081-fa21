@@ -65,3 +65,4 @@
 //   TRAPFRAME (p->trapframe, used by the trampoline)
 //   TRAMPOLINE (the same page as in the kernel)
 #define TRAPFRAME (TRAMPOLINE - PGSIZE)
+#define MMAPEND TRAPFRAME // 这里我有一个误区。之前一直以为TRAPFRAME应该是MMAP的开始地址

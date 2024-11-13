@@ -15,6 +15,7 @@
 #include "sleeplock.h"
 #include "file.h"
 #include "fcntl.h"
+#include "memlayout.h"
 
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
@@ -483,4 +484,83 @@ sys_pipe(void)
     return -1;
   }
   return 0;
+}
+
+
+uint64
+sys_mmap(void)
+{
+  uint64 size; // 映射过去的字节数，可能与文件大小不一样
+  int prot; // 指示内存是否应映射为可读、可写，以及/或者可执行的
+  int flags; // flags要么是MAP_SHARED（映射内存的修改应写回文件），要么是MAP_PRIVATE（映射内存的修改不应写回文件）
+  int fd; // 映射的文件的打开文件描述符
+
+  if(argaddr(1, &size) != 0)
+  {
+    return -1;
+  }
+
+  if(argint(2, &prot) != 0) 
+  {
+    return -1;
+  }
+
+  if(argint(3, &flags) != 0)
+  {
+    return -1;
+  }
+
+ if(argint(4, &fd) != 0)
+  {
+    return -1;
+  }
+
+  struct proc* p = myproc();
+  struct vma* v = 0;
+
+  struct file* file;
+  file = p->ofile[fd];
+
+  if(!file->writable && (prot & PROT_WRITE) && (flags & MAP_SHARED))
+  return -1;
+
+  size = PGROUNDUP(size);
+  
+  struct vma** vsearch = p->vma;
+  int vma_find = 0;
+  uint64 vend = MMAPEND;
+
+  for(int i = 0; i < VMA_LENGTH; i++) {
+    if(vma_find == 0) {
+      if (vsearch[i]->valid == 0) {
+      vma_find = 1;
+      v = vsearch[i];
+      }
+    } else if(vsearch[i]->addr < vend){
+      vend = PGROUNDUP(vsearch[i]->addr);
+    }
+  }
+
+  if(v = 0)
+  {
+    printf("cant mmap more file\n");
+    return -1;
+  }
+
+  v->addr = vend - size;
+  v->f = fd;
+  v->flags = flags;
+  v->prot = prot;
+  v->offset = 0;
+  v->size = size;
+
+  filedup(v->f);
+  
+  return v->addr; 
+}
+
+uint64
+sys_munmap(void)
+{
+  return 1;
 }
