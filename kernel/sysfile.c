@@ -524,31 +524,36 @@ sys_mmap(void)
   if(!file->writable && (prot & PROT_WRITE) && (flags & MAP_SHARED))
   return -1;
 
-  size = PGROUNDUP(size);
+  size = PGROUNDUP(size); // 为了释放的时候好释放
   
-  struct vma** vsearch = p->vma;
+  struct vma *vsearch = p->vma;
   int vma_find = 0;
   uint64 vend = MMAPEND;
 
-  for(int i = 0; i < VMA_LENGTH; i++) {
-    if(vma_find == 0) {
-      if (vsearch[i]->valid == 0) {
-      vma_find = 1;
-      v = vsearch[i];
-      }
-    } else if(vsearch[i]->addr < vend){
-      vend = PGROUNDUP(vsearch[i]->addr);
+for (int i = 0; i < VMA_LENGTH; i++) {
+    if (vsearch[i].valid == 0) {
+        // 找到第一个无效的 vma 位置
+        if (vma_find == 0) {
+            vma_find = 1;
+            v = &vsearch[i]; // 指向第一个空闲的 vma 位置
+            v->valid = 1;
+        }
+    } else if (vsearch[i].addr < vend) {
+        // 更新 vend，使它指向未使用空间的最低有效地址
+        vend = PGROUNDDOWN(vsearch[i].addr);
     }
-  }
+}
 
-  if(v = 0)
+// 返回找到的 vma 或 vend 值的结果
+
+  if(v == 0)
   {
     printf("cant mmap more file\n");
     return -1;
   }
 
   v->addr = vend - size;
-  v->f = fd;
+  v->f = file;
   v->flags = flags;
   v->prot = prot;
   v->offset = 0;
@@ -561,6 +566,84 @@ sys_mmap(void)
 
 uint64
 sys_munmap(void)
+{ 
+  uint64 addr,size;
+
+  if( argaddr(0,&addr) || argaddr(1,&size) ) return -1;
+
+  struct proc *p = myproc();
+  struct vma *v = find_vma(p, addr);
+
+  // 如果size大于一个页，我们释放两次，小于一个页，直接释放当前页
+
+  
+
+  
+
+
+
+  return 1;
+}
+
+// 根据传进来的虚拟地址寻找对应vma
+struct vma*
+find_vma(struct proc* p, uint64 va)
 {
+  struct vma *vsearch = p->vma;
+  struct vma *v = 0;
+  uint64 vap = 0;
+  for(int i = 0; i < VMA_LENGTH; i++)
+  {
+    vap = vsearch[i].addr;
+    if (vsearch[i].valid == 1 && va >= vap && va < vap + vsearch[i].size - 1){
+        v = &vsearch[i]; // 找到该vma，接下来准备映射
+        return v;
+    }
+  }
+  return 0;
+}
+
+
+int
+lazy_load_mmap(uint64 va)
+{ 
+// 根据访问到的无效地址寻找对应的vma，并为其分配物理内存。
+struct proc *p = myproc();
+struct vma *v;
+// 寻找va对应地址
+v = find_vma(p, va);
+
+if(v == 0)
+{
+  return 0; // 引发trap的位置并不是vma区，直接返回 
+}
+
+// 如果是vma区，我们则需要分配物理内存，并将虚拟内存里的数据映射过去，此外，还需要从磁盘读写数据(写到这句话的时候我突然蒙了，我要往哪读数据？？？)
+char* mem;
+mem = kalloc();
+if(mem == 0) return -1;
+
+memset(mem, 0, PGSIZE);
+
+begin_op();
+ilock(v->f->ip);
+readi(v->f->ip, 0, (uint64)mem, PGROUNDDOWN(va - v->addr), PGSIZE);
+// 为啥我们需要这个偏移量
+// 因为这个偏移量就是我们的开始位置，文件并不总是从开头读入，PGROUNDDOWN(va - v->addr)代表文件拷贝时要跳过多少个页帧
+iunlock(v->f->ip);
+end_op();
+// set appropriate perms, then map it.
+  int perm = PTE_U | PTE_V;
+  if(v->prot & PROT_READ)
+    perm |= PTE_R;
+  if(v->prot & PROT_WRITE)
+    perm |= PTE_W;
+  if(v->prot & PROT_EXEC)
+    perm |= PTE_X;
+
+  if(mappages(p->pagetable, va, PGSIZE, (uint64)mem, PTE_R | PTE_W | PTE_U) < 0) {
+    panic("vmalazytouch: mappages");
+  }
+
   return 1;
 }

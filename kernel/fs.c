@@ -452,6 +452,16 @@ stati(struct inode *ip, struct stat *st)
 // Caller must hold ip->lock.
 // If user_dst==1, then dst is a user virtual address;
 // otherwise, dst is a kernel address.
+/**
+ * 从指定的inode中读取数据到目标内存区域。
+ * 
+ * @param ip 指向inode结构的指针，包含文件的元数据信息。
+ * @param user_dst 标志位，指示目标内存区域是否在用户空间。
+ * @param dst 目标内存区域的地址。
+ * @param off 文件中的起始偏移量。
+ * @param n 要读取的数据长度。
+ * @return 成功读取的字节数，如果发生错误则返回-1。
+ */
 int
 readi(struct inode *ip, int user_dst, uint64 dst, uint off, uint n)
 {
