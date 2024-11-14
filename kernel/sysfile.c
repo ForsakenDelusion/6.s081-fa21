@@ -564,26 +564,7 @@ for (int i = 0; i < VMA_LENGTH; i++) {
   return v->addr; 
 }
 
-uint64
-sys_munmap(void)
-{ 
-  uint64 addr,size;
 
-  if( argaddr(0,&addr) || argaddr(1,&size) ) return -1;
-
-  struct proc *p = myproc();
-  struct vma *v = find_vma(p, addr);
-
-  // 如果size大于一个页，我们释放两次，小于一个页，直接释放当前页
-
-  
-
-  
-
-
-
-  return 1;
-}
 
 // 根据传进来的虚拟地址寻找对应vma
 struct vma*
@@ -601,6 +582,45 @@ find_vma(struct proc* p, uint64 va)
     }
   }
   return 0;
+}
+
+
+uint64
+munmap(uint64 addr, uint64 size)
+{ 
+  // 找到地址范围的VMA并取消映射指定页面（提示：使用uvmunmap）。如果munmap删除了先前mmap的所有页面，它应该减少相应struct file的引用计数。如果未映射的页面已被修改，并且文件已映射到MAP_SHARED，请将页面写回该文件。
+  struct proc *p = myproc();
+  struct vma *v = find_vma(p, addr);
+
+  // 接下来判断是否有挖洞区，如果挖洞了，就直接return -1
+  if (addr > v->addr && addr < v->addr + v->size)
+  {
+    return -1;
+  }
+
+  mmap_write_back(p->pagetable, addr, size, v);
+
+  if (addr == v->addr)
+  {
+    v->addr += size;
+  }
+  v->size -= size;
+
+  if(v->size <= 0)
+  {
+    fileclose(v->f);
+    v->valid = 0;
+  }
+
+  return 1; // 代表释放成功
+}
+
+uint64
+sys_munmap(){
+  // int munmap(void *addr, size_t length);
+  uint64 addr,size;
+  if( argaddr(0,&addr) || argaddr(1,&size) ) return -1;
+  return munmap(addr, size);
 }
 
 

@@ -8,6 +8,7 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
+struct vma;
 
 // bio.c
 void            binit(void);
@@ -139,6 +140,9 @@ int             fetchstr(uint64, char*, int);
 int             fetchaddr(uint64, uint64*);
 void            syscall();
 
+// sysfile.c
+uint64          munmap(uint64, uint64);
+
 // trap.c
 extern uint     ticks;
 void            trapinit(void);
@@ -171,6 +175,7 @@ int             copyout(pagetable_t, uint64, char *, uint64);
 int             copyin(pagetable_t, char *, uint64, uint64);
 int             copyinstr(pagetable_t, char *, uint64, uint64);
 int             lazy_load_mmap(uint64);
+int             mmap_write_back(pagetable_t,uint64, uint64, struct vma *);
 
 // plic.c
 void            plicinit(void);

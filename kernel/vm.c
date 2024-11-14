@@ -5,6 +5,11 @@
 #include "riscv.h"
 #include "defs.h"
 #include "fs.h"
+#include "fcntl.h"
+#include "spinlock.h"
+#include "sleeplock.h"
+#include "file.h"
+#include "proc.h"
 
 /*
  * the kernel's page table.
@@ -431,4 +436,35 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   } else {
     return -1;
   }
+}
+
+int
+mmap_write_back(pagetable_t pt,uint64 va, uint64 size, struct vma* vma)
+{
+// 把带脏位的页帧写回文件中，并且取消映射
+// 写回的是 src_va 开始的，长度为 len
+  uint64 a;
+  pte_t *pte;
+
+  for(a = PGROUNDDOWN(va); a < PGROUNDDOWN(va + size); a += PGSIZE){
+    if((pte = walk(pt, a, 0)) == 0){ 
+      panic("mmap_writeback: walk");
+    }
+    if(PTE_FLAGS(*pte) == PTE_V)
+      panic("mmap_writeback: not leaf");
+    if(!(*pte & PTE_V)) continue; // 懒分配
+
+    if((*pte & PTE_D) && (vma->flags & MAP_SHARED)){ 
+      // 写回
+      begin_op();
+      ilock(vma->f->ip);
+      uint64 copied_len = a - va;
+      writei(vma->f->ip, 1, a, copied_len, PGSIZE);
+      iunlock(vma->f->ip);
+      end_op();
+    }
+    kfree((void*)PTE2PA(*pte));
+    *pte = 0;
+  }
+  return 0;
 }
